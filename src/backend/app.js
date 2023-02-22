@@ -3,6 +3,8 @@ const app = express();
 const router = express.Router();
 const path = require("path");
 
+const reservationsRouter = require("./api/reservations");
+const knex = require("./database");
 const mealsRouter = require("./api/meals");
 const buildPath = path.join(__dirname, "../../dist");
 const port = process.env.PORT || 3000;
@@ -19,6 +21,7 @@ app.use(express.json());
 
 app.use(cors());
 
+router.use("/reservations", reservationsRouter);
 router.use("/meals", mealsRouter);
 
 if (process.env.API_PATH) {

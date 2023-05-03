@@ -1,93 +1,73 @@
 const express = require("express");
 const router = express.Router();
 const knex = require("../database");
-
-// GET - Returns all meals
-
 router.get("/", async (req, res) => {
-  try {
-    const getAllMeals = await knex.select("*").table("meal");
+  let selectedMeals = knex.select("meal.*").from("meal");
 
-    if (getAllMeals.length !== 0) {
-      res.send(getAllMeals);
-    } else {
-      res.status(204).send("Meal list is empty");
-    }
-  } catch (error) {
-    res.status(500).json({ error: "Error" });
-    throw error;
+  // Returns all meals that are cheaper than maxPrice. (api/meals?maxPrice=90)
+
+  if ("maxPrice" in req.query) {
+    selectedMeals.where("price", "<=", req.query.maxPrice);
   }
-});
 
-// POST - Adds a new meal to the database
+  //Returns all meals that still have available spots left, if true.
+  // If false, return meals that have no available spots left. (api/meals?availableReservations=true)
 
-router.post("/", async (req, res) => {
-  try {
-    const addNewMeal = await knex("meal").insert(req.body);
-    if (addNewMeal) {
-      res.status(201).send("New meal was added");
+  if ("availableReservations" in req.query) {
+    selectedMeals
+      .innerJoin("reservation", "reservation.meal_id", "=", "meal.id")
+      .groupBy("meal.id", "meal.title");
+    if (req.query.availableReservations === "false") {
+      selectedMeals.having(
+        "meal.max_reservations",
+        "<=",
+        knex.raw("SUM(reservation.number_of_guests)")
+      );
     } else {
-      res.status(400).send("This meal cant be added");
+      selectedMeals.having(
+        "meal.max_reservations",
+        ">",
+        knex.raw("SUM(reservation.number_of_guests)")
+      );
     }
-  } catch (error) {
-    res.status(500).json({ error: "Error" });
-    throw error;
   }
-});
 
-// GET - Returns the meal by id
+  // Returns all meals that partially match the given title.
+  // Rød grød will match the meal with the title Rød grød med fløde. (api/meals?title=Indian%20platter)
 
-router.get("/:id", async (req, res) => {
-  try {
-    const mealById = await knex
-      .select("*")
-      .from("meal")
-      .where({ id: req.params.id });
-
-    if (mealById.length !== 0) {
-      res.send(mealById);
-    } else {
-      res.status(404).send(`The meal with id ${req.params.id} is not found`);
-    }
-  } catch (error) {
-    res.status(500).json({ error: "Error" });
-    throw error;
+  if ("title" in req.query) {
+    const mealTitle = String(req.query.title).toLowerCase();
+    selectedMeals.where("title", "like", `%${mealTitle}%`);
   }
-});
 
-// PUT - Updates the meal by id
+  // Returns all meals where the date for when is after the given date. (api/meals?dateAfter=2022-10-01)
 
-router.put("/:id", async (req, res) => {
-  try {
-    const mealById = await knex("meal").where({ id: req.params.id });
-
-    if (mealById.length === 0) {
-      res.status(404).send(`The meal with id ${req.params.id} is not found`);
-    } else {
-      await knex("meal").where({ id: req.params.id }).update(req.body);
-      const updatedMeal = await knex("meal").where({ id: req.params.id });
-      res.send(updatedMeal);
-    }
-  } catch (error) {
-    res.status(500).json({ error: "Error" });
-    throw error;
+  if (req.query.dateAfter) {
+    selectedMeals.where("when", ">", req.query.dateAfter);
   }
-});
 
-// DELETE - Deletes the meal by id
+  // Returns all meals where the date for when is before the given date.  (api/meals?dateBefore=2022-08-08)
 
-router.delete("/:id", async (req, res) => {
-  try {
-    const mealById = await knex("meal").where({ id: req.params.id });
+  if (req.query.dateBefore) {
+    selectedMeals.where("when", "<", req.query.dateBefore);
+  }
 
-    if (mealById.length === 0) {
-      res.status(404).send(`The meal with id ${req.params.id} is not found`);
+  // Returns the given number of meals. (api/meals?limit=7)
+
+  if ("limit" in req.query) {
+    selectedMeals.limit(req.query.limit);
+  }
+  // Returns all meals sorted by the given key. (api/meals?sortKey=price)
+  // Returns all meals sorted in the given direction. (api/meals?sortKey=price&sortDir=desc)
+
+  const sortedByKey = req.query.sortKey;
+  const sortedByDirection = req.query.sortDir;
+  if (["when", "max_reservavtions", "price"].includes(sortedByKey)) {
+    if (sortedByDirection === "asc" || sortedByDirection === "desc") {
+      selectedMeals.orderBy(sortedByKey, sortedByDirection);
     } else {
-      await knex("meal").where({ id: req.params.id }).del();
-      res.send(`The meal with id ${req.params.id} is deleted`);
+      selectedMeals.orderBy(sortedByKey);
     }
-  } catch (error) {
-    res.status(500).json({ error: "Error" });
-    throw error;
+  }
   }
 });

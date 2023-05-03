@@ -69,37 +69,5 @@ router.get("/", async (req, res) => {
       selectedMeals.orderBy(sortedByKey);
     }
   }
-
-  try {
-    const result = await selectedMeals;
-    if (result.length !== 0) {
-      res.json(result);
-    } else {
-      res.status(404).json({ message: "Meal list is empty" });
-    }
-  } catch (error) {
-    res.status(500).json({ error: "Error" });
-    throw Error;
-  }
-});
-
-//Returns all reviews for a specific meal (/api/meals/:meal_id/reviews)
-
-router.get("/:meal_id/reviews", async (req, res) => {
-  const query = knex
-    .select("review.*")
-    .from("review")
-    .innerJoin("meal", "review.meal_id", "=", `meal.id`)
-    .having("meal_id", "=", req.params.meal_id);
-  try {
-    const findReviews = await query;
-    if (findReviews.length) {
-      res.json(findReviews);
-    } else {
-      res.status(404).send("Reviews list is empty");
-    }
-  } catch (error) {
-    res.status(500).json({ error: "Error" });
-    throw Error;
   }
 });
